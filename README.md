@@ -1,15 +1,14 @@
-<!-- Badges (replace href/src with your own) -->
 <p align="center">
-  <a href="ASSET_URL_BADGE_BUILD"><img src="ASSET_URL_BADGE_BUILD" alt="Build Status"></a>
-  <a href="ASSET_URL_BADGE_PI"><img src="ASSET_URL_BADGE_PI" alt="Raspberry Pi"></a>
-  <a href="ASSET_URL_BADGE_LICENSE"><img src="ASSET_URL_BADGE_LICENSE" alt="License"></a>
+  <a href="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/badge_build.png"><img src="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/badge_build.png" alt="Build Status"></a>
+  <a href="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/badge_pi.png"><img src="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/badge_pi.png" alt="Raspberry Pi"></a>
+  <a href="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/badge_license.png"><img src="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/badge_license.png" alt="License"></a>
 </p>
 
 <h1 align="center">Ars0n Framework — Raspberry Pi Edition 🛠️</h1>
 <p align="center">ARM64-optimized fork with a hardened, reproducible setup. Fixes the classic “Failed to fetch” by steering the frontend to the Pi’s API IP.</p>
 
 <p align="center">
-  <img src="ASSET_URL_HERO" alt="Ars0n Pi Edition Hero" width="860">
+  <img src="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/hero.png" alt="Ars0n Pi Edition Hero" width="860">
 </p>
 
 ---
@@ -29,10 +28,11 @@
 ## 🚀 Quick Start (5 steps)
 
 1) **Install prerequisites**  
-   Docker + Docker Compose. Ensure your user is in `docker` group.
+   Docker + Docker Compose. Ensure your user is in the `docker` group.
 
 2) **Configure frontend environment**  
-   Detect your Pi’s LAN IP and inject into client build:
+   Detect your Pi’s LAN IP and inject into the client build:
+
    ```bash
    PI_IP=$(hostname -I | awk '{print $1}')
    echo "REACT_APP_SERVER_IP=${PI_IP}" > client/.env
@@ -47,8 +47,8 @@
    ```
 
 4. **Open the app**
-   UI: `http://${PI_IP}:3000`
-   API: `https://${PI_IP}:8443`
+   UI → `http://${PI_IP}:3000`
+   API → `https://${PI_IP}:8443`
 
 5. **(Optional) Enable autostart**
    See [Autostart on Boot](#-autostart-on-boot).
@@ -58,7 +58,7 @@
 ## 🧭 Architecture
 
 <p align="center">
-  <img src="ASSET_URL_ARCH" alt="High-level Architecture" width="860">
+  <img src="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/architecture.png" alt="High-level Architecture" width="860">
 </p>
 
 **Flow summary**
@@ -71,7 +71,7 @@
 
 * Client → `3000/tcp` (host → container)
 * API → `8443/tcp` (host → container)
-* DB → `5432/tcp` (internal only unless you expose it)
+* DB → `5432/tcp` (internal only unless exposed)
 
 ---
 
@@ -81,7 +81,7 @@
 
 * Raspberry Pi 4 (8 GB recommended), ARM64 Linux.
 * Docker daemon running.
-* Add your user to docker:
+* Add your user to Docker:
 
   ```bash
   sudo usermod -aG docker ${USER}
@@ -97,7 +97,7 @@ PI_IP=$(hostname -I | awk '{print $1}')
 echo "REACT_APP_SERVER_IP=${PI_IP}" > client/.env
 ```
 
-This writes something like:
+This writes:
 
 ```
 REACT_APP_SERVER_IP=192.168.1.92
@@ -115,9 +115,8 @@ docker compose up -d
 
 ## 🔥 Ignition Script
 
-Use this one-liner setup script to automate IP detection, env generation, and deployment.
-
-> Save as `ignition.sh` in repo root, then `chmod +x ignition.sh` and run `./ignition.sh`.
+Automates IP detection, environment generation, and deployment.
+Save as `ignition.sh` in repo root, make it executable (`chmod +x ignition.sh`), then run:
 
 ```bash
 #!/usr/bin/env bash
@@ -152,7 +151,7 @@ echo "API : https://${PI_IP}:8443"
 ```
 
 <p align="center">
-  <img src="ASSET_URL_FLOW" alt="Ignition Flow" width="720">
+  <img src="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/ignition_flow.png" alt="Ignition Flow" width="720">
 </p>
 
 ---
@@ -195,22 +194,22 @@ sudo systemctl enable --now ars0n.service
 
 * [ ] `client/.env` exists and contains `REACT_APP_SERVER_IP=<Pi IP>`
 * [ ] `docker compose up -d` completes without errors
-* [ ] `docker compose ps` shows `client`, `api`, `db` `Up`
+* [ ] `docker compose ps` shows `client`, `api`, `db` as `Up`
 * [ ] UI reachable at `http://${PI_IP}:3000`
 * [ ] API reachable at `https://${PI_IP}:8443`
-* [ ] Browser DevTools Network calls go to your Pi IP, not `127.0.0.1`
+* [ ] Network calls in browser target the Pi IP (not `127.0.0.1`)
 
 ---
 
 ## 🛠️ Troubleshooting
 
-| Symptom                           | Root Cause                           | Remediation                                                                    |
-| --------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------ |
-| “Failed to fetch” / cannot import | Frontend still points to `127.0.0.1` | Recreate `client/.env` and rebuild. Confirm requests hit `https://${IP}:8443`. |
-| CORS error in browser             | API origin not allowed               | Configure API to allow `http://${PI_IP}:3000`.                                 |
-| UI loads, actions fail            | API unreachable or wrong protocol    | Test with `curl -k https://${PI_IP}:8443/…`. Fix protocol or certificate.      |
-| Nothing on `:3000`                | Client not exposed or bound          | Confirm `ports: "3000:3000"` and client listens on `0.0.0.0`.                  |
-| DB errors                         | DB not healthy or wrong env          | Check `docker compose logs db` and API `DATABASE_URL`.                         |
+| Symptom                          | Root Cause                           | Fix                                                                      |
+| -------------------------------- | ------------------------------------ | ------------------------------------------------------------------------ |
+| “Failed to fetch” / import fails | Frontend still points to `127.0.0.1` | Recreate `.env`, rebuild, confirm requests hit `https://${IP}:8443`.     |
+| CORS error in browser            | API not allowing frontend origin     | Allow CORS for `http://${PI_IP}:3000`.                                   |
+| UI loads but actions fail        | API unreachable / wrong protocol     | `curl -k https://${PI_IP}:8443/` to verify API; adjust protocol or cert. |
+| Nothing on `:3000`               | Client binds only to localhost       | Ensure it listens on `0.0.0.0` in config.                                |
+| DB errors                        | Database not ready / bad credentials | Check `docker compose logs db` and API’s `DATABASE_URL`.                 |
 
 Logs:
 
@@ -220,7 +219,7 @@ docker compose logs api
 docker compose logs db
 ```
 
-Network and ports:
+Network & ports:
 
 ```bash
 docker compose ps
@@ -232,17 +231,17 @@ ss -tulpen | grep -E '(:3000|:8443)'
 ## ❓ FAQ
 
 **Q:** Do I need to edit the compose file for my IP?
-**A:** No. Create `client/.env` with `REACT_APP_SERVER_IP` or run `./ignition.sh`. Then build.
+**A:** No. Run `./ignition.sh` or manually create `.env` before building.
 
 **Q:** Can I change the UI port?
-**A:** Yes. Edit the client service `ports` mapping in `docker-compose.yml`.
+**A:** Yes. Edit the `client` service `ports` mapping in `docker-compose.yml`.
 
 **Q:** Will this work on non-Pi hosts?
-**A:** Yes, as long as `REACT_APP_SERVER_IP` reflects the host IP the browser should call.
+**A:** Yes, provided the environment variable points to the correct host IP.
 
 ---
 
-## 📦 Client snippet (reference)
+## 📦 Client Snippet (Reference)
 
 ```yaml
 client:
@@ -260,10 +259,10 @@ client:
     - ars0n-network
 ```
 
-> Ensure your full compose file follows the same pattern.
+> Ensure your full compose file matches this pattern.
 
 ---
 
 <p align="center">
-  <img src="ASSET_URL_FOOTER" alt="Footer" width="680">
+  <img src="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/footer.png" alt="Footer" width="680">
 </p>
