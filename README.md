@@ -27,16 +27,16 @@
 
 ## 🚀 Quick Start (5 steps)
 
-1) **Install prerequisites**  
+1. **Install prerequisites**  
    Docker + Docker Compose. Ensure your user is in the `docker` group.
 
-2) **Configure frontend environment**  
+2. **Configure frontend environment**  
    Detect your Pi’s LAN IP and inject into the client build:
 
    ```bash
    PI_IP=$(hostname -I | awk '{print $1}')
    echo "REACT_APP_SERVER_IP=${PI_IP}" > client/.env
-````
+   ```
 
 3. **Build & run the stack**
 
@@ -46,11 +46,11 @@
    docker compose up -d
    ```
 
-4. **Open the app**
-   UI → `http://${PI_IP}:3000`
+4. **Open the app**  
+   UI → `http://${PI_IP}:3000`  
    API → `https://${PI_IP}:8443`
 
-5. **(Optional) Enable autostart**
+5. **(Optional) Enable autostart**  
    See [Autostart on Boot](#-autostart-on-boot).
 
 ---
@@ -63,15 +63,15 @@
 
 **Flow summary**
 
-* **Client** (React) reads `REACT_APP_SERVER_IP` at build time → calls **API** at `https://${IP}:8443`.
-* **API** serves requests, talks to **PostgreSQL**, orchestrates modules (assetfinder, gospider, nuclei, etc.).
-* All services live on Docker network `ars0n-network`.
+- **Client** (React) reads `REACT_APP_SERVER_IP` at build time → calls **API** at `https://${IP}:8443`.
+- **API** serves requests, talks to **PostgreSQL**, orchestrates modules (assetfinder, gospider, nuclei, etc.).
+- All services live on Docker network `ars0n-network`.
 
 **Ports**
 
-* Client → `3000/tcp` (host → container)
-* API → `8443/tcp` (host → container)
-* DB → `5432/tcp` (internal only unless exposed)
+- Client → `3000/tcp` (host → container)  
+- API → `8443/tcp` (host → container)  
+- DB → `5432/tcp` (internal only unless exposed)
 
 ---
 
@@ -79,9 +79,9 @@
 
 ### Prereqs & Permissions
 
-* Raspberry Pi 4 (8 GB recommended), ARM64 Linux.
-* Docker daemon running.
-* Add your user to Docker:
+- Raspberry Pi 4 (8 GB recommended), ARM64 Linux  
+- Docker daemon running  
+- Add your user to Docker:
 
   ```bash
   sudo usermod -aG docker ${USER}
@@ -115,7 +115,7 @@ docker compose up -d
 
 ## 🔥 Ignition Script
 
-Automates IP detection, environment generation, and deployment.
+Automates IP detection, environment generation, and deployment.  
 Save as `ignition.sh` in repo root, make it executable (`chmod +x ignition.sh`), then run:
 
 ```bash
@@ -192,27 +192,26 @@ sudo systemctl enable --now ars0n.service
 
 ## ✅ Verification Checklist
 
-* [ ] `client/.env` exists and contains `REACT_APP_SERVER_IP=<Pi IP>`
-* [ ] `docker compose up -d` completes without errors
-* [ ] `docker compose ps` shows `client`, `api`, `db` as `Up`
-* [ ] UI reachable at `http://${PI_IP}:3000`
-* [ ] API reachable at `https://${PI_IP}:8443`
-* [ ] Network calls in browser target the Pi IP (not `127.0.0.1`)
+- [ ] `client/.env` exists and contains `REACT_APP_SERVER_IP=<Pi IP>`  
+- [ ] `docker compose up -d` completes without errors  
+- [ ] `docker compose ps` shows `client`, `api`, `db` as `Up`  
+- [ ] UI reachable at `http://${PI_IP}:3000`  
+- [ ] API reachable at `https://${PI_IP}:8443`  
+- [ ] Browser network calls target the Pi IP (not `127.0.0.1`)
 
 ---
 
 ## 🛠️ Troubleshooting
 
-| Symptom                          | Root Cause                           | Fix                                                                      |
-| -------------------------------- | ------------------------------------ | ------------------------------------------------------------------------ |
-| “Failed to fetch” / import fails | Frontend still points to `127.0.0.1` | Recreate `.env`, rebuild, confirm requests hit `https://${IP}:8443`.     |
-| CORS error in browser            | API not allowing frontend origin     | Allow CORS for `http://${PI_IP}:3000`.                                   |
-| UI loads but actions fail        | API unreachable / wrong protocol     | `curl -k https://${PI_IP}:8443/` to verify API; adjust protocol or cert. |
-| Nothing on `:3000`               | Client binds only to localhost       | Ensure it listens on `0.0.0.0` in config.                                |
-| DB errors                        | Database not ready / bad credentials | Check `docker compose logs db` and API’s `DATABASE_URL`.                 |
+| Symptom | Root Cause | Fix |
+|----------|-------------|-----|
+| “Failed to fetch” / import fails | Frontend still points to `127.0.0.1` | Recreate `.env`, rebuild, confirm requests hit `https://${IP}:8443`. |
+| CORS error in browser | API not allowing frontend origin | Allow CORS for `http://${PI_IP}:3000`. |
+| UI loads but actions fail | API unreachable / wrong protocol | `curl -k https://${PI_IP}:8443/` to verify API; adjust protocol or cert. |
+| Nothing on `:3000` | Client binds only to localhost | Ensure it listens on `0.0.0.0` in config. |
+| DB errors | Database not ready / bad credentials | Check `docker compose logs db` and API’s `DATABASE_URL`. |
 
 Logs:
-
 ```bash
 docker compose logs client
 docker compose logs api
@@ -220,7 +219,6 @@ docker compose logs db
 ```
 
 Network & ports:
-
 ```bash
 docker compose ps
 ss -tulpen | grep -E '(:3000|:8443)'
@@ -230,13 +228,13 @@ ss -tulpen | grep -E '(:3000|:8443)'
 
 ## ❓ FAQ
 
-**Q:** Do I need to edit the compose file for my IP?
+**Q:** Do I need to edit the compose file for my IP?  
 **A:** No. Run `./ignition.sh` or manually create `.env` before building.
 
-**Q:** Can I change the UI port?
+**Q:** Can I change the UI port?  
 **A:** Yes. Edit the `client` service `ports` mapping in `docker-compose.yml`.
 
-**Q:** Will this work on non-Pi hosts?
+**Q:** Will this work on non-Pi hosts?  
 **A:** Yes, provided the environment variable points to the correct host IP.
 
 ---
