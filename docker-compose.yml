@@ -61,7 +61,10 @@ services:
 
   client:
     container_name: ars0n-framework-v2-client-1
-    build: ./client
+    build:
+      context: ./client
+      args:
+        REACT_APP_SERVER_IP: 192.168.1.92
     ports:
       - "3000:3000"
     depends_on:
