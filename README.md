@@ -27,10 +27,14 @@
 
 ## 🚀 Quick Start (5 steps)
 
-1. **Install prerequisites**  
-   Docker + Docker Compose. Ensure your user is in the `docker` group.
+1. **Install prerequisites**
 
-2. **Configure frontend environment**  
+   ```bash
+   sudo wget https://archive.kali.org/archive-keyring.gpg -O /usr/share/keyrings/kali-archive-keyring.gpg
+   Docker + Docker Compose. Ensure your user is in the `docker` group.
+   ```
+   
+3. **Configure frontend environment**  
    Detect your Pi’s LAN IP and inject into the client build:
 
    ```bash
@@ -38,7 +42,7 @@
    echo "REACT_APP_SERVER_IP=${PI_IP}" > client/.env
    ```
 
-3. **Build & run the stack**
+4. **Build & run the stack**
 
    ```bash
    docker compose down
@@ -46,11 +50,11 @@
    docker compose up -d
    ```
 
-4. **Open the app**  
+5. **Open the app**  
    UI → `http://${PI_IP}:3000`  
    API → `https://${PI_IP}:8443`
 
-5. **(Optional) Enable autostart**  
+6. **(Optional) Enable autostart**  
    See [Autostart on Boot](#-autostart-on-boot).
 
 ---
