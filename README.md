@@ -124,8 +124,33 @@ Save as `ignition.sh` in repo root, make it executable (`chmod +x ignition.sh`),
 
 ```bash
 #!/usr/bin/env bash
+# Author: 4ndr0666
 set -e
+# ================ // IGNITION.SH //
+# Description: A simple shell script to setup and install
+#              the ars0n framework v2 pi-support
+# ---------------------------------------------------
 
+# Update & Install Docker
+sudo apt update -y && sudo apt upgrade -y
+sudo apt-get update -y && sudo apt-get upgrade -y
+sudo apt install docker.io docker-compose
+
+# SystemD
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Groups
+sudo groupadd docker
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Framework
+cd $HOME
+wget "https://github.com/R-s0n/ars0n-framework-v2/releases/download/beta-0.0.1/ars0n-framework-v2-beta-0.0.1.zip"
+cd ars0n-framework-v2
+
+# Set IP
 echo "[+] Detecting Pi IP address..."
 PI_IP=$(hostname -I | awk '{print $1}')
 if [ -z "$PI_IP" ]; then
@@ -134,17 +159,19 @@ if [ -z "$PI_IP" ]; then
 fi
 echo "Detected IP: $PI_IP"
 
+# React Server Setup
 echo "[+] Writing frontend env configuration (client/.env)..."
 mkdir -p client
 cat > client/.env <<EOF
 REACT_APP_SERVER_IP=${PI_IP}
 EOF
 
+# Docker
 echo "[+] Shutting down any existing containers..."
 docker compose down || true
 
-echo "[+] Building containers (no cache)..."
-docker compose build --no-cache
+echo "[+] Building containers..."
+docker-compose up build || docker builder prune && docker-compose build --no-cache
 
 echo "[+] Starting containers..."
 docker compose up -d
