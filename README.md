@@ -148,6 +148,7 @@ newgrp docker
 # Framework
 cd $HOME
 wget "https://github.com/R-s0n/ars0n-framework-v2/releases/download/beta-0.0.1/ars0n-framework-v2-beta-0.0.1.zip"
+unzip ars0n-framework-v2-beta-0.0.1.zip
 cd ars0n-framework-v2
 
 # Set IP
