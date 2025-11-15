@@ -132,6 +132,7 @@ set -e
 # ---------------------------------------------------
 
 # Update & Install Docker
+cd /home/kali
 sudo apt update -y && sudo apt upgrade -y
 sudo apt-get update -y && sudo apt-get upgrade -y
 sudo apt install docker.io docker-compose
@@ -141,12 +142,9 @@ sudo systemctl start docker
 sudo systemctl enable docker
 
 # Groups
-sudo groupadd docker
-sudo usermod -aG docker $USER
-newgrp docker
+sudo usermod -aG docker $USER || sudo groupadd docker && sudo usermod -aG docker $USER
 
 # Framework
-cd $HOME
 wget "https://github.com/R-s0n/ars0n-framework-v2/releases/download/beta-0.0.1/ars0n-framework-v2-beta-0.0.1.zip"
 unzip ars0n-framework-v2-beta-0.0.1.zip
 cd ars0n-framework-v2
@@ -169,7 +167,7 @@ EOF
 
 # Docker
 echo "[+] Shutting down any existing containers..."
-docker compose down || true
+docker compose down | -y
 
 echo "[+] Building containers..."
 docker-compose up build || docker builder prune && docker-compose build --no-cache
