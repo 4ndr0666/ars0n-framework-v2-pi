@@ -170,7 +170,7 @@ echo "[+] Shutting down any existing containers..."
 docker compose down | -y
 
 echo "[+] Building containers..."
-docker-compose up build || docker builder prune && docker-compose build --no-cache
+docker-compose up --build || docker builder prune && docker-compose build --no-cache
 
 echo "[+] Starting containers..."
 docker compose up -d
