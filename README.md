@@ -8,7 +8,7 @@
 <p align="center">ARM64-optimized fork with a hardened, reproducible setup. Fixes the classic “Failed to fetch” by steering the frontend to the Pi’s API IP.</p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/hero.png" alt="Ars0n Pi Edition Hero" width="860">
+  <img src="assets/hero.png" alt="Ars0n Pi Edition Hero" width="860">
 </p>
 
 ---
@@ -62,7 +62,7 @@
 ## 🧭 Architecture
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/architecture.png" alt="High-level Architecture" width="860">
+  <img src="assets/architecture.png" alt="High-level Architecture" width="860">
 </p>
 
 **Flow summary**
@@ -181,7 +181,7 @@ echo "API : https://${PI_IP}:8443"
 ```
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/ignition_flow.png" alt="Ignition Flow" width="720">
+  <img src="assets/ignition_flow.png" alt="Ignition Flow" width="720">
 </p>
 
 ---
@@ -292,5 +292,5 @@ client:
 ---
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/4ndr0666/ars0n-framework-v2-pi/refs/heads/pi-support/assets/footer.png" alt="Footer" width="680">
+  <img src="assets/footer.png" alt="Footer" width="680">
 </p>
