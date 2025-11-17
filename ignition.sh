@@ -1,83 +1,82 @@
-#/usr/bin/env bash
-#
-# ignition.sh — Multi‑arch builder and launcher for the ars0n framework (v2)
-#
-# This script provisions Docker and buildx, generates the React .env file
-# with the Pi's local IP address, builds all services for both amd64 and
-# arm64 platforms, and launches the stack via docker compose.  It is safe
-# to run repeatedly; previous containers are brought down automatically.
-#
-# Usage:
-#   ./ignition.sh
-#
-# Author: 4ndr0666 (updated by ChatGPT)
+#!/usr/bin/env bash
+# Author: 4ndr0666 
+# set -euo pipefail
+# ====================== // IGNITION.SH //
+# Description: Multi‑arch builder and launcher for the ars0n-framework-v2-pi , builds all services for both amd64 and
+#                    arm64 platforms, and launches the stack via docker compose. It is safe
+#                    to run repeatedly; previous containers are brought down automatically.
+#                    Paths and package names are Pi 4 + Kali/Ubuntu ARM64 compatible.
+# -------------------------------------------------------------------------
+REPO_URL="https://github.com/4ndr0666/ars0n-framework-v2-pi"
+ARCHIVE_URL="${REPO_URL}/archive/refs/heads/main.zip"
+ARCHIVE_NAME="main.zip"
+EXTRACTED_DIR="ars0n-framework-v2-pi-main"
 
-set -euo pipefail
+if [ ! -d "${EXTRACTED_DIR}" ]; then
+  echo "[+] Downloading latest framework release..."
+  wget -O "${ARCHIVE_NAME}" "${ARCHIVE_URL}"
+  unzip -o "${ARCHIVE_NAME}"
+  rm -f "${ARCHIVE_NAME}"
+fi
 
-echo "[+] Updating system packages…"
+cd "${EXTRACTED_DIR}"
+
+echo "[+] Updating and upgrading system packages..."
 sudo apt update -y && sudo apt upgrade -y
 
-echo "[+] Installing Docker, Compose and qemu-user-static for multi‑arch builds…"
-sudo apt install -y docker.io docker-compose qemu-user-static
+echo "[+] Installing Docker, Compose, QEMU for multi-arch..."
+sudo apt install -y docker.io docker-compose qemu-user-static unzip wget
 
-echo "[+] Enabling Docker service…"
+if ! groups "$USER" | grep -q '\bdocker\b'; then
+  echo "[+] Adding user '$USER' to docker group..."
+  sudo usermod -aG docker "$USER" || true
+  echo "[!] You may need to log out and back in, or run: newgrp docker"
+fi
+
+echo "[+] Ensuring Docker service is running..."
 sudo systemctl enable docker
 sudo systemctl start docker
 
-echo "[+] Adding current user to docker group…"
-sudo usermod -aG docker "$USER" || true
-
-echo "[+] Detecting local IP address…"
+echo "[+] Detecting local IP address..."
 PI_IP=$(hostname -I | awk '{print $1}')
 if [[ -z "$PI_IP" ]]; then
   echo "[!] ERROR: Could not detect local IP address. Exiting." >&2
   exit 1
 fi
 echo "[+] Detected IP: $PI_IP"
-
-echo "[+] Writing frontend .env file…"
 mkdir -p client
-cat > client/.env <<EOF
-REACT_APP_SERVER_IP=${PI_IP}
-EOF
+echo "REACT_APP_SERVER_IP=${PI_IP}" > client/.env
 
-echo "[+] Configuring Docker buildx for multi‑architecture builds…"
-# Create a buildx builder if it doesn't already exist
+echo "[+] Configuring Docker buildx and QEMU emulation..."
 if ! docker buildx inspect ars0nbuilder >/dev/null 2>&1; then
   docker buildx create --name ars0nbuilder --use
 fi
-# Ensure QEMU emulators are registered and bootstrap the builder
 docker run --rm --privileged multiarch/qemu-user-static --reset -p yes || true
 docker buildx inspect --bootstrap
 
-echo "[+] Building core services (server, client, ai_service)…"
 CORE_SERVICES=( server client ai_service )
-for svc in "${CORE_SERVICES[@]}"; do
-  echo "    • $svc"
-  docker buildx build \
-    --platform linux/amd64,linux/arm64 \
-    -t ars0n/$svc:latest \
-    "./$svc" \
-    --load
-done
-
-echo "[+] Building tool containers…"
 TOOL_SERVICES=( subfinder assetfinder katana sublist3r cloud_enum ffuf subdomainizer cewl metabigor httpx gospider dnsx github-recon nuclei shuffledns )
-for tool in "${TOOL_SERVICES[@]}"; do
-  echo "    • $tool"
-  docker buildx build \
-    --platform linux/amd64,linux/arm64 \
-    -t ars0n/$tool:latest \
-    "./docker/$tool" \
-    --load
+
+echo "[+] Building core services for linux/amd64 and linux/arm64..."
+for svc in "${CORE_SERVICES[@]}"; do
+  echo "    • Building core: $svc"
+  docker buildx build --platform linux/amd64,linux/arm64 \
+    -t ars0n/$svc:latest "./$svc" --load
 done
 
-echo "[+] Shutting down any existing containers…"
+echo "[+] Building tool services for linux/amd64 and linux/arm64..."
+for tool in "${TOOL_SERVICES[@]}"; do
+  echo "    • Building tool: $tool"
+  docker buildx build --platform linux/amd64,linux/arm64 \
+    -t ars0n/$tool:latest "./docker/$tool" --load
+done
+
+echo "[+] Shutting down any existing containers (safe if none running)..."
 docker compose down || true
 
-echo "[+] Launching the framework…"
+echo "[+] Launching the ars0n framework stack..."
 docker compose up -d
 
 echo "[+] Setup complete!"
-echo "UI available at: http://${PI_IP}:3000"
-echo "API available at: https://${PI_IP}:8443"
+echo "UI  : http://${PI_IP}:3000"
+echo "API : https://${PI_IP}:8443"
