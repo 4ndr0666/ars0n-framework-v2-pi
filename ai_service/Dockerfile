@@ -1,24 +1,22 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
+# Set working directory
 WORKDIR /app
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV TRANSFORMERS_VERBOSITY=info
-ENV TRANSFORMERS_OFFLINE=0
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    git \
-    && apt-get clean \
+# Install system build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# Copy and install dependencies
+COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy the AI service source code
 COPY . .
 
-EXPOSE 8000
+# Expose the port used by the AI service (adjust if needed)
+EXPOSE 5050
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "debug"] 
+# Run the service
+CMD ["python", "main.py"]

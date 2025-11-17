@@ -1,7 +1,8 @@
-FROM golang:1.24-alpine
+FROM golang:1.21 AS build
+WORKDIR /src
+RUN git clone --depth 1 https://github.com/j3ssie/metabigor.git .
+RUN CGO_ENABLED=0 go build -o /metabigor .
 
-ENV ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH=go1.24
-
-RUN go install github.com/j3ssie/metabigor@latest
-
-ENTRYPOINT ["/go/bin/metabigor"] 
+FROM alpine:3.19
+COPY --from=build /metabigor /usr/bin/metabigor
+ENTRYPOINT ["/usr/bin/metabigor"]

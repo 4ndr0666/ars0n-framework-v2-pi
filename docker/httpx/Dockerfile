@@ -1,9 +1,9 @@
-FROM golang:1.24-alpine
+FROM golang:1.21 AS build
+WORKDIR /src
+RUN git clone --depth 1 https://github.com/projectdiscovery/httpx.git
+WORKDIR /src/httpx/cmd/httpx
+RUN CGO_ENABLED=0 go build -o /httpx .
 
-RUN apk add --no-cache git
-RUN go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
-
-WORKDIR /app
-RUN mkdir -p /data && chmod 777 /data
-
-ENTRYPOINT ["httpx"] 
+FROM alpine:3.19
+COPY --from=build /httpx /usr/bin/httpx
+ENTRYPOINT ["/usr/bin/httpx"]

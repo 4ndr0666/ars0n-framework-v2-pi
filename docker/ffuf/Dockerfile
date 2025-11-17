@@ -1,6 +1,9 @@
-FROM golang:1.24-alpine
-RUN apk add --no-cache git
-RUN go install github.com/ffuf/ffuf/v2@latest
-WORKDIR /app
-RUN mkdir -p /wordlists
-ENTRYPOINT ["sleep", "infinity"] 
+FROM golang:1.21 AS build
+WORKDIR /src
+RUN git clone --depth 1 https://github.com/ffuf/ffuf.git
+WORKDIR /src/ffuf
+RUN CGO_ENABLED=0 go build -o /ffuf
+
+FROM alpine:3.19
+COPY --from=build /ffuf /usr/bin/ffuf
+ENTRYPOINT ["/usr/bin/ffuf"]

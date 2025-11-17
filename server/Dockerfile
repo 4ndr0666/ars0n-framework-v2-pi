@@ -1,23 +1,22 @@
-FROM golang:1.24-alpine
+FROM python:3.11-slim AS base
 
-# Install required packages
-RUN apk add --no-cache git gcc musl-dev docker
-
-# Install httpx
-RUN go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
-
+# Set working directory
 WORKDIR /app
 
-COPY go.mod go.sum ./
-RUN go mod download
+# Install system dependencies for compiling Python packages and libpq for Postgres
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc build-essential libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
+# Copy dependency specification and install dependencies
+COPY requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
 COPY . .
 
-RUN mkdir -p /app/temp
-RUN chmod -R 777 /app/temp
-
-RUN go build -o main .
-
+# Expose API port
 EXPOSE 8443
 
-CMD ["./main"]
+# Start the FastAPI server (adjust the command to match your app's entry point)
+CMD ["python", "main.py"]
