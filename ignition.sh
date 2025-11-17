@@ -54,20 +54,31 @@ fi
 docker run --rm --privileged multiarch/qemu-user-static --reset -p yes || true
 docker buildx inspect --bootstrap
 
+# Detect host architecture for Docker build
+case $(uname -m) in
+  x86_64)   DOCKER_PLATFORM="linux/amd64" ;;
+  aarch64)  DOCKER_PLATFORM="linux/arm64" ;;
+  *)
+    echo "[!] ERROR: Unsupported architecture: $(uname -m). Only x86_64 and aarch64 are supported." >&2
+    exit 1
+    ;;
+esac
+echo "[+] Detected Docker platform: $DOCKER_PLATFORM"
+
 CORE_SERVICES=( server client ai_service )
 TOOL_SERVICES=( subfinder assetfinder katana sublist3r cloud_enum ffuf subdomainizer cewl metabigor httpx gospider dnsx github-recon nuclei shuffledns )
 
-echo "[+] Building core services for linux/amd64 and linux/arm64..."
+echo "[+] Building core services for $DOCKER_PLATFORM..."
 for svc in "${CORE_SERVICES[@]}"; do
   echo "    • Building core: $svc"
-  docker buildx build --platform linux/amd64,linux/arm64 \
+  docker buildx build --platform $DOCKER_PLATFORM \
     -t ars0n/$svc:latest "./$svc" --load
 done
 
-echo "[+] Building tool services for linux/amd64 and linux/arm64..."
+echo "[+] Building tool services for $DOCKER_PLATFORM..."
 for tool in "${TOOL_SERVICES[@]}"; do
   echo "    • Building tool: $tool"
-  docker buildx build --platform linux/amd64,linux/arm64 \
+  docker buildx build --platform $DOCKER_PLATFORM \
     -t ars0n/$tool:latest "./docker/$tool" --load
 done
 

@@ -39,7 +39,7 @@ services:
       - ars0n-network
 
   # ---------------------------------------------------------------------------
-  # API: FastAPI backend.  Built from the ./server context.  Waits on the
+  # API: Go backend.  Built from the ./server context.  Waits on the
   # database to be healthy.  Listens on port 8443 and exposes database
   # credentials via environment variables.
   api:

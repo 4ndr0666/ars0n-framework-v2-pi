@@ -188,7 +188,8 @@ echo "API : https://${PI_IP}:8443"
 </p>
 
 * **Client**: React SPA, API IP injected at build-time from `.env`.
-* **API**: Python FastAPI, manages DB/tool orchestration.
+* **API**: Go backend, manages DB/tool orchestration.
+* **AI Service**: Optional Python service for AI-related tasks, disabled by default.
 * **DB**: ARM64-optimized Postgres 14-alpine (multi-arch image).
 * **Tools**: All major recon and OSINT tools (built from source, multi-arch, e.g., gospider, nuclei, subfinder, etc.).
 * **Networking**: Docker bridge `ars0n-network`.
