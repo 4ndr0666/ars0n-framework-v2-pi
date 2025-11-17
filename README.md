@@ -5,7 +5,7 @@
 </p>
 
 <h1 align="center">Ars0n Framework — Raspberry Pi Edition 🛠️</h1>
-<p align="center">ARM64-optimized, multi-arch ready, reproducible, and designed for Pi 4. Hardened Docker stack, gospider fixed, and frictionless deployment. “Failed to fetch” is dead—frontend always targets the correct API IP.</p>
+<p align="center">ARM64-optimized, multi-arch ready, reproducible, and designed for Pi 4. This version delivers hardened Docker builds, resilient provisioning, and a frictionless “it just works” deployment experience. Gospider is corrected, multi-arch builds are default, and “Failed to fetch” is dead—frontend always targets the live Pi API IP.</p>
 
 <p align="center">
   <img src="assets/hero.png" alt="Ars0n Pi Edition Hero" width="860">
@@ -15,134 +15,82 @@
 
 ## Table of Contents
 
-- [Quick Start](#-quick-start)
-- [Architecture](#-architecture)
-- [Detailed Setup](#-detailed-setup)
-- [Ignition Script](#-ignition-script)
-- [Autostart on Boot](#-autostart-on-boot)
-- [Verification Checklist](#-verification-checklist)
-- [Troubleshooting](#-troubleshooting)
-- [FAQ](#-faq)
+- [Workflow Overview](#workflow-overview)
+- [Quick Start](#quick-start)
+- [Ignition Script](#ignition-script)
+- [Architecture](#architecture)
+- [Detailed Setup & Edge Cases](#detailed-setup--edge-cases)
+- [Autostart on Boot](#autostart-on-boot)
+- [Verification Checklist](#verification-checklist)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+
+---
+
+## Workflow Overview
+
+This project is engineered for repeatable, automated deployment on ARM64 and x86_64 systems (Raspberry Pi 4, cloud VMs, etc).  
+**Workflow stages:**
+1. **Update/upgrade system, install dependencies** (Docker, Compose, QEMU).
+2. **Verify Docker daemon/service** and group permissions.
+3. **Obtain project assets** (clone or download, with fallback logic).
+4. **Generate environment and configure networking** (auto-detect IP, build .env, inject for React client).
+5. **Multi-arch build configuration** (`buildx` builder, QEMU emulation—robustly handled for idempotency).
+6. **Full stack build** (core + tooling, ARM64 & AMD64, resilient to partial failures).
+7. **Automated service launch** (teardown old containers, boot everything fresh).
+8. **Optional: Systemd autostart for full headless operation.**
+
+All steps include error handling and are safe to run multiple times.
 
 ---
 
 ## 🚀 Quick Start
 
-1. **Install prerequisites**
-
-   ```bash
-   sudo apt update -y && sudo apt upgrade -y
-   sudo apt install -y docker.io docker-compose qemu-user-static
-   sudo usermod -aG docker $USER
-   ````
-
-Log out and back in (or run `newgrp docker`) to apply group changes.
-
-2. **Download/clone this repository**
-
-   ```bash
-   git clone https://github.com/4ndr0666/ars0n-framework-v2-pi.git
-   cd ars0n-framework-v2-pi
-   ```
-
-3. **Run the ignition script**
-
-   The ignition script automates IP detection, `.env` generation, Docker multi-arch builder setup, QEMU registration, image builds, and stack launch:
-
-   ```bash
-   chmod +x ignition.sh
-   ./ignition.sh
-   ```
-
-   This will:
-
-   * Detect your Pi’s LAN IP
-   * Generate `client/.env`
-   * Initialize Docker buildx (multi-arch builder)
-   * Register QEMU emulators for cross-arch builds
-   * Build all core and tooling services for ARM64 + AMD64
-   * Launch the full stack
-
-4. **Access the App**
-
-   * UI → `http://<Pi IP>:3000`
-   * API → `https://<Pi IP>:8443`
-
-   Your Pi’s IP is detected automatically and set in the client environment.
-
-5. **(Optional) Enable autostart**
-
-   See [Autostart on Boot](#-autostart-on-boot).
-
----
-
-## 🧭 Architecture
-
-<p align="center">
-  <img src="assets/architecture.png" alt="High-level Architecture" width="860">
-</p>
-
-* **Client**: React SPA, gets API IP via `client/.env` at build time.
-* **API**: Python FastAPI, manages DB and tool orchestration.
-* **DB**: ARM64-optimized Postgres 14-alpine.
-* **Tools**: All major recon and OSINT tools (built from source, multi-arch).
-* **Networking**: Docker bridge `ars0n-network`.
-
-**Key Ports**
-
-* UI (client): `3000/tcp`
-* API (server): `8443/tcp`
-* DB (internal): `5432/tcp`
-
----
-
-## 📋 Detailed Setup
-
-**Hardware & OS Requirements**
-
-* Raspberry Pi 4 (8 GB RAM recommended)
-* ARM64 Linux (Kali, Ubuntu, Raspbian, etc.)
-
-**Software Prereqs**
-
-* Docker
-* Docker Compose
-* QEMU (for multi-arch builds)
-
-**Permissions**
+**Do everything with one command (recommended):**
 
 ```bash
-sudo usermod -aG docker $USER
-newgrp docker
-```
+git clone https://github.com/4ndr0666/ars0n-framework-v2-pi.git
+cd ars0n-framework-v2-pi
+chmod +x ignition.sh
+./ignition.sh
+````
 
-**Frontend API Address**
-
-Automatically configured by `ignition.sh`. To do it manually:
-
-```bash
-PI_IP=$(hostname -I | awk '{print $1}')
-echo "REACT_APP_SERVER_IP=${PI_IP}" > client/.env
-```
-
-**Manual Build/Run (if skipping ignition.sh):**
+<details>
+<summary>Alternative: Download ZIP</summary>
 
 ```bash
-docker buildx create --name ars0nbuilder --use || docker buildx use ars0nbuilder
-docker run --rm --privileged multiarch/qemu-user-static --reset -p yes || true
-docker buildx inspect --bootstrap
-docker compose build
-docker compose up -d
+wget "https://github.com/4ndr0666/ars0n-framework-v2-pi/archive/refs/tags/v3.zip"
+unzip v3.zip
+cd ars0n-framework-v2-pi-3
+chmod +x ignition.sh
+./ignition.sh
 ```
+
+</details>
 
 ---
 
 ## 🔥 Ignition Script
 
-Full automation: upgrades system, installs Docker/Compose/QEMU, configures multi-arch buildx, sets up the React environment, registers QEMU emulation, builds all containers for ARM64 and AMD64, and brings up the stack.
+The `ignition.sh` script handles **everything** (system update, dependency install, group fix, project .env config, multi-arch Docker buildx + QEMU, full stack build, and launch).
+
+It is **safe to re-run anytime**—always cleans up previous builds/containers.
+
+**Core logic:**
+
+* Performs robust system update/upgrade first.
+* Installs and verifies Docker, Compose, QEMU.
+* Ensures current user is in the `docker` group (avoids future sudo headaches).
+* Detects the Pi’s (or VM’s) LAN IP for correct network access.
+* Writes `.env` to `client/` for React build-time config.
+* Initializes or reuses a dedicated `buildx` builder for multi-arch builds.
+* Registers all QEMU emulators (safe if already present).
+* Builds core and tool services for `linux/amd64` and `linux/arm64` targets.
+* Brings down any stale containers.
+* Brings up the full stack cleanly and prints endpoints.
 
 <details>
-<summary>View ignition.sh</summary>
+<summary>View the full <code>ignition.sh</code></summary>
 
 ```bash
 #!/usr/bin/env bash
@@ -228,9 +176,97 @@ docker compose up -d
 echo "[+] Setup complete!"
 echo "UI available at: http://${PI_IP}:3000"
 echo "API available at: https://${PI_IP}:8443"
-````
+```
 
 </details>
+
+---
+
+## 🧭 Architecture
+
+<p align="center">
+  <img src="assets/architecture.png" alt="High-level Architecture" width="860">
+</p>
+
+* **Client**: React SPA, API IP injected at build-time from `.env`.
+* **API**: Python FastAPI, manages DB/tool orchestration.
+* **DB**: ARM64-optimized Postgres 14-alpine (multi-arch image).
+* **Tools**: All major recon and OSINT tools (built from source, multi-arch, e.g., gospider, nuclei, subfinder, etc.).
+* **Networking**: Docker bridge `ars0n-network`.
+
+**Key Ports**
+
+* UI (client): `3000/tcp`
+* API (server): `8443/tcp`
+* DB (internal only): `5432/tcp`
+
+---
+
+## 📋 Detailed Setup & Edge Cases
+
+### 1. **Prerequisites & Dependencies**
+
+* Raspberry Pi 4 (8GB+ recommended) or x86_64 VM
+* ARM64 Linux (Kali, Ubuntu, Raspbian, etc.)
+* Docker, Docker Compose, QEMU (`qemu-user-static` for multi-arch emulation)
+
+### 2. **Permissions & Groups**
+
+```bash
+sudo usermod -aG docker $USER || true
+newgrp docker
+```
+
+*This ensures your user can build/run Docker containers without `sudo`. Re-login or run `newgrp docker` to update your group immediately.*
+
+### 3. **Get the Project**
+
+```bash
+git clone https://github.com/4ndr0666/ars0n-framework-v2-pi.git
+cd ars0n-framework-v2-pi
+```
+
+*Or download as a ZIP if you can’t use `git`.*
+
+### 4. **Generate the Client .env**
+
+Automatically handled by `ignition.sh`. For manual config:
+
+```bash
+PI_IP=$(hostname -I | awk '{print $1}')
+echo "REACT_APP_SERVER_IP=${PI_IP}" > client/.env
+```
+
+### 5. **Multi-Arch Docker Build (with QEMU)**
+
+*All handled automatically, but manual steps for reference:*
+
+```bash
+sudo apt install qemu-user-static
+docker buildx create --name ars0nbuilder --use || docker buildx use ars0nbuilder
+docker run --rm --privileged multiarch/qemu-user-static --reset -p yes || true
+docker buildx inspect --bootstrap
+```
+
+### 6. **Build & Run Stack**
+
+```bash
+docker compose down || true
+docker buildx build --platform linux/amd64,linux/arm64 -t ars0n/client:latest ./client --load
+# ...repeat for each service as needed...
+docker compose up -d
+```
+
+### 7. **Edge Cases & Error Handling**
+
+* If Docker fails to start:
+  `sudo systemctl start docker && sudo systemctl enable docker`
+* If permission denied:
+  `newgrp docker` and retry, or re-login.
+* If “Failed to fetch”:
+  Check `client/.env` and confirm correct IP.
+* For build errors, ensure QEMU is registered and builder is bootstrapped.
+* The script is safe to re-run as often as needed.
 
 ---
 
@@ -259,7 +295,7 @@ RestartSec=10s
 WantedBy=multi-user.target
 ```
 
-Enable it:
+Enable and start:
 
 ```bash
 sudo systemctl daemon-reload
@@ -289,13 +325,13 @@ sudo systemctl enable --now ars0n.service
 | Nothing on `:3000`               | Client binds only to localhost       | Ensure it listens on `0.0.0.0` in config.                               |
 | DB errors                        | Database not ready / wrong image     | Use `arm64v8/postgres:14-alpine` and delete old DB volumes.             |
 
-Logs:
+Check logs:
 
 ```bash
 docker compose logs client
 docker compose logs api
 docker compose logs db
-````
+```
 
 Network & ports:
 
@@ -318,7 +354,7 @@ ss -tulpen | grep -E '(:3000|:8443)'
 **A:** Edit the `client` service `ports` mapping in `docker-compose.yml`.
 
 **Q:** How do I add a new tool?
-**A:** Add its Dockerfile under `docker/`, append to the TOOL_SERVICES array in `ignition.sh`, and add a service in `docker-compose.yml`.
+**A:** Add its Dockerfile under `docker/`, append to the `TOOL_SERVICES` array in `ignition.sh`, and add a service in `docker-compose.yml`.
 
 ---
 
