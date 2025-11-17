@@ -1,8 +1,9 @@
-FROM golang:1.21 AS build
+# katana: requires Go >= 1.24
+FROM golang:1.24 AS build
 WORKDIR /src
 RUN git clone --depth 1 https://github.com/projectdiscovery/katana.git
 WORKDIR /src/katana/cmd/katana
-RUN CGO_ENABLED=0 go build -o /katana .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /katana
 
 FROM alpine:3.19
 COPY --from=build /katana /usr/bin/katana
