@@ -1,9 +1,9 @@
-FROM golang:1.21 AS build
-WORKDIR /src
-RUN git clone --depth 1 https://github.com/tomnomnom/assetfinder.git
-WORKDIR /src/assetfinder
-RUN CGO_ENABLED=0 go build -o /assetfinder
+FROM golang:1.21 as build
 
-FROM alpine:3.19
-COPY --from=build /assetfinder /usr/bin/assetfinder
-ENTRYPOINT ["/usr/bin/assetfinder"]
+WORKDIR /src/assetfinder
+RUN git clone https://github.com/tomnomnom/assetfinder.git . && \
+    GO111MODULE=off go build -o /assetfinder
+
+FROM alpine:3.18
+COPY --from=build /assetfinder /assetfinder
+ENTRYPOINT ["/assetfinder"]
