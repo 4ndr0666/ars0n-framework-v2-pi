@@ -47,7 +47,7 @@ Log out and back in (or run `newgrp docker`) to apply group changes.
 
 3. **Run the ignition script**
 
-   The ignition script automates IP detection, `.env` generation, Docker multi-arch builder setup, image builds, and stack launch:
+   The ignition script automates IP detection, `.env` generation, Docker multi-arch builder setup, QEMU registration, image builds, and stack launch:
 
    ```bash
    chmod +x ignition.sh
@@ -59,6 +59,7 @@ Log out and back in (or run `newgrp docker`) to apply group changes.
    * Detect your Pi’s LAN IP
    * Generate `client/.env`
    * Initialize Docker buildx (multi-arch builder)
+   * Register QEMU emulators for cross-arch builds
    * Build all core and tooling services for ARM64 + AMD64
    * Launch the full stack
 
@@ -128,6 +129,7 @@ echo "REACT_APP_SERVER_IP=${PI_IP}" > client/.env
 
 ```bash
 docker buildx create --name ars0nbuilder --use || docker buildx use ars0nbuilder
+docker run --rm --privileged multiarch/qemu-user-static --reset -p yes || true
 docker buildx inspect --bootstrap
 docker compose build
 docker compose up -d
@@ -137,72 +139,96 @@ docker compose up -d
 
 ## 🔥 Ignition Script
 
-Full automation: upgrades system, installs Docker/Compose/QEMU, configures multi-arch buildx, sets up the React environment, builds all containers for ARM64 and AMD64, and brings up the stack.
+Full automation: upgrades system, installs Docker/Compose/QEMU, configures multi-arch buildx, sets up the React environment, registers QEMU emulation, builds all containers for ARM64 and AMD64, and brings up the stack.
 
 <details>
 <summary>View ignition.sh</summary>
 
 ```bash
 #!/usr/bin/env bash
-set -e
+#
+# ignition.sh — Multi‑arch builder and launcher for the ars0n framework (v2)
+#
+# This script provisions Docker and buildx, generates the React .env file
+# with the Pi's local IP address, builds all services for both amd64 and
+# arm64 platforms, and launches the stack via docker compose.  It is safe
+# to run repeatedly; previous containers are brought down automatically.
+#
+# Usage:
+#   ./ignition.sh
+#
+# Author: 4ndr0666 (updated by ChatGPT)
 
-echo "[+] Updating system…"
+set -euo pipefail
+
+echo "[+] Updating system packages…"
 sudo apt update -y && sudo apt upgrade -y
 
-echo "[+] Installing Docker + Compose + QEMU…"
+echo "[+] Installing Docker, Compose and qemu-user-static for multi‑arch builds…"
 sudo apt install -y docker.io docker-compose qemu-user-static
 
-echo "[+] Enabling Docker…"
+echo "[+] Enabling Docker service…"
 sudo systemctl enable docker
 sudo systemctl start docker
 
-echo "[+] Adding user to docker group…"
-sudo usermod -aG docker "$USER"
+echo "[+] Adding current user to docker group…"
+sudo usermod -aG docker "$USER" || true
 
+echo "[+] Detecting local IP address…"
 PI_IP=$(hostname -I | awk '{print $1}')
-if [ -z "$PI_IP" ]; then
-    echo "[!] ERROR: Failed to detect local IP"
-    exit 1
+if [[ -z "$PI_IP" ]]; then
+  echo "[!] ERROR: Could not detect local IP address. Exiting." >&2
+  exit 1
 fi
 echo "[+] Detected IP: $PI_IP"
 
+echo "[+] Writing frontend .env file…"
 mkdir -p client
 cat > client/.env <<EOF
 REACT_APP_SERVER_IP=${PI_IP}
 EOF
-echo "[+] Wrote client/.env"
 
-echo "[+] Setting up multi-arch builder…"
-docker buildx create --name ars0nbuilder --use >/dev/null 2>&1 || docker buildx use ars0nbuilder
+echo "[+] Configuring Docker buildx for multi‑architecture builds…"
+# Create a buildx builder if it doesn't already exist
+if ! docker buildx inspect ars0nbuilder >/dev/null 2>&1; then
+  docker buildx create --name ars0nbuilder --use
+fi
+# Ensure QEMU emulators are registered and bootstrap the builder
+docker run --rm --privileged multiarch/qemu-user-static --reset -p yes || true
 docker buildx inspect --bootstrap
 
+echo "[+] Building core services (server, client, ai_service)…"
 CORE_SERVICES=( server client ai_service )
 for svc in "${CORE_SERVICES[@]}"; do
-    echo "[+] Building core service: $svc"
-    docker buildx build --platform linux/amd64,linux/arm64 -t ars0n/$svc:latest "./$svc" --load
+  echo "    • $svc"
+  docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    -t ars0n/$svc:latest \
+    "./$svc" \
+    --load
 done
 
-TOOLS=(
-    subfinder assetfinder katana sublist3r cloud_enum ffuf
-    subdomainizer cewl metabigor httpx gospider dnsx
-    github-recon nuclei shuffledns
-)
-for tool in "${TOOLS[@]}"; do
-    echo "[+] Building tool container: $tool"
-    docker buildx build --platform linux/amd64,linux/arm64 -t ars0n/$tool:latest "./docker/$tool" --load
+echo "[+] Building tool containers…"
+TOOL_SERVICES=( subfinder assetfinder katana sublist3r cloud_enum ffuf subdomainizer cewl metabigor httpx gospider dnsx github-recon nuclei shuffledns )
+for tool in "${TOOL_SERVICES[@]}"; do
+  echo "    • $tool"
+  docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    -t ars0n/$tool:latest \
+    "./docker/$tool" \
+    --load
 done
 
-echo "[+] Shutting down previous containers…"
+echo "[+] Shutting down any existing containers…"
 docker compose down || true
 
-echo "[+] Bringing up framework…"
+echo "[+] Launching the framework…"
 docker compose up -d
 
-echo ""
 echo "[+] Setup complete!"
-echo "UI  : http://${PI_IP}:3000"
-echo "API : https://${PI_IP}:8443"
-```
+echo "UI available at: http://${PI_IP}:3000"
+echo "API available at: https://${PI_IP}:8443"
+````
 
 </details>
 
@@ -269,7 +295,7 @@ Logs:
 docker compose logs client
 docker compose logs api
 docker compose logs db
-```
+````
 
 Network & ports:
 
@@ -292,7 +318,7 @@ ss -tulpen | grep -E '(:3000|:8443)'
 **A:** Edit the `client` service `ports` mapping in `docker-compose.yml`.
 
 **Q:** How do I add a new tool?
-**A:** Add its Dockerfile under `docker/`, append to the TOOLS array in `ignition.sh`, and add a service in `docker-compose.yml`.
+**A:** Add its Dockerfile under `docker/`, append to the TOOL_SERVICES array in `ignition.sh`, and add a service in `docker-compose.yml`.
 
 ---
 
