@@ -5,7 +5,7 @@
 </p>
 
 <h1 align="center">Ars0n Framework — Raspberry Pi Edition 🛠️</h1>
-<p align="center">ARM64-optimized fork with a hardened, reproducible setup. Fixes the classic “Failed to fetch” by steering the frontend to the Pi’s API IP.</p>
+<p align="center">ARM64-optimized, multi-arch ready, reproducible, and designed for Pi 4. Hardened Docker stack, gospider fixed, and frictionless deployment. “Failed to fetch” is dead—frontend always targets the correct API IP.</p>
 
 <p align="center">
   <img src="assets/hero.png" alt="Ars0n Pi Edition Hero" width="860">
@@ -14,7 +14,8 @@
 ---
 
 ## Table of Contents
-- [Quick Start](#-quick-start-5-steps)
+
+- [Quick Start](#-quick-start)
 - [Architecture](#-architecture)
 - [Detailed Setup](#-detailed-setup)
 - [Ignition Script](#-ignition-script)
@@ -25,36 +26,51 @@
 
 ---
 
-## 🚀 Quick Start (5 steps)
+## 🚀 Quick Start
 
 1. **Install prerequisites**
 
    ```bash
-   sudo wget https://archive.kali.org/archive-keyring.gpg -O /usr/share/keyrings/kali-archive-keyring.gpg
-   Docker + Docker Compose. Ensure your user is in the `docker` group.
-   ```
-   
-3. **Configure frontend environment**  
-   Detect your Pi’s LAN IP and inject into the client build:
+   sudo apt update -y && sudo apt upgrade -y
+   sudo apt install -y docker.io docker-compose qemu-user-static
+   sudo usermod -aG docker $USER
+   ````
+
+Log out and back in (or run `newgrp docker`) to apply group changes.
+
+2. **Download/clone this repository**
 
    ```bash
-   PI_IP=$(hostname -I | awk '{print $1}')
-   echo "REACT_APP_SERVER_IP=${PI_IP}" > client/.env
+   git clone https://github.com/4ndr0666/ars0n-framework-v2-pi.git
+   cd ars0n-framework-v2-pi
    ```
 
-4. **Build & run the stack**
+3. **Run the ignition script**
+
+   The ignition script automates IP detection, `.env` generation, Docker multi-arch builder setup, image builds, and stack launch:
 
    ```bash
-   docker compose down
-   docker compose build --no-cache
-   docker compose up -d
+   chmod +x ignition.sh
+   ./ignition.sh
    ```
 
-5. **Open the app**  
-   UI → `http://${PI_IP}:3000`  
-   API → `https://${PI_IP}:8443`
+   This will:
 
-6. **(Optional) Enable autostart**  
+   * Detect your Pi’s LAN IP
+   * Generate `client/.env`
+   * Initialize Docker buildx (multi-arch builder)
+   * Build all core and tooling services for ARM64 + AMD64
+   * Launch the full stack
+
+4. **Access the App**
+
+   * UI → `http://<Pi IP>:3000`
+   * API → `https://<Pi IP>:8443`
+
+   Your Pi’s IP is detected automatically and set in the client environment.
+
+5. **(Optional) Enable autostart**
+
    See [Autostart on Boot](#-autostart-on-boot).
 
 ---
@@ -65,53 +81,55 @@
   <img src="assets/architecture.png" alt="High-level Architecture" width="860">
 </p>
 
-**Flow summary**
+* **Client**: React SPA, gets API IP via `client/.env` at build time.
+* **API**: Python FastAPI, manages DB and tool orchestration.
+* **DB**: ARM64-optimized Postgres 14-alpine.
+* **Tools**: All major recon and OSINT tools (built from source, multi-arch).
+* **Networking**: Docker bridge `ars0n-network`.
 
-- **Client** (React) reads `REACT_APP_SERVER_IP` at build time → calls **API** at `https://${IP}:8443`.
-- **API** serves requests, talks to **PostgreSQL**, orchestrates modules (assetfinder, gospider, nuclei, etc.).
-- All services live on Docker network `ars0n-network`.
+**Key Ports**
 
-**Ports**
-
-- Client → `3000/tcp` (host → container)  
-- API → `8443/tcp` (host → container)  
-- DB → `5432/tcp` (internal only unless exposed)
+* UI (client): `3000/tcp`
+* API (server): `8443/tcp`
+* DB (internal): `5432/tcp`
 
 ---
 
 ## 📋 Detailed Setup
 
-### Prereqs & Permissions
+**Hardware & OS Requirements**
 
-- Raspberry Pi 4 (8 GB recommended), ARM64 Linux  
-- Docker daemon running  
-- Add your user to Docker:
+* Raspberry Pi 4 (8 GB RAM recommended)
+* ARM64 Linux (Kali, Ubuntu, Raspbian, etc.)
 
-  ```bash
-  sudo usermod -aG docker ${USER}
-  newgrp docker
-  ```
+**Software Prereqs**
 
-### Configure Frontend → API
+* Docker
+* Docker Compose
+* QEMU (for multi-arch builds)
 
-Create the `.env` **before** building:
+**Permissions**
+
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+**Frontend API Address**
+
+Automatically configured by `ignition.sh`. To do it manually:
 
 ```bash
 PI_IP=$(hostname -I | awk '{print $1}')
 echo "REACT_APP_SERVER_IP=${PI_IP}" > client/.env
 ```
 
-This writes:
-
-```
-REACT_APP_SERVER_IP=192.168.1.92
-```
-
-### Build & Run
+**Manual Build/Run (if skipping ignition.sh):**
 
 ```bash
-docker compose down
-docker compose build --no-cache
+docker buildx create --name ars0nbuilder --use || docker buildx use ars0nbuilder
+docker buildx inspect --bootstrap
+docker compose build
 docker compose up -d
 ```
 
@@ -119,70 +137,74 @@ docker compose up -d
 
 ## 🔥 Ignition Script
 
-Automates IP detection, environment generation, and deployment.  
-Save as `ignition.sh` in repo root, make it executable (`chmod +x ignition.sh`), then run:
+Full automation: upgrades system, installs Docker/Compose/QEMU, configures multi-arch buildx, sets up the React environment, builds all containers for ARM64 and AMD64, and brings up the stack.
+
+<details>
+<summary>View ignition.sh</summary>
 
 ```bash
 #!/usr/bin/env bash
-# Author: 4ndr0666
 set -e
-# ================ // IGNITION.SH //
-# Description: A simple shell script to setup and install
-#              the ars0n framework v2 pi-support
-# ---------------------------------------------------
 
-# Update & Install Docker
-cd /home/kali
+echo "[+] Updating system…"
 sudo apt update -y && sudo apt upgrade -y
-sudo apt-get update -y && sudo apt-get upgrade -y
-sudo apt install docker.io docker-compose
 
-# SystemD
-sudo systemctl start docker
+echo "[+] Installing Docker + Compose + QEMU…"
+sudo apt install -y docker.io docker-compose qemu-user-static
+
+echo "[+] Enabling Docker…"
 sudo systemctl enable docker
+sudo systemctl start docker
 
-# Groups
-sudo usermod -aG docker $USER || sudo groupadd docker && sudo usermod -aG docker $USER
+echo "[+] Adding user to docker group…"
+sudo usermod -aG docker "$USER"
 
-# Framework
-wget "https://github.com/R-s0n/ars0n-framework-v2/releases/download/beta-0.0.1/ars0n-framework-v2-beta-0.0.1.zip"
-unzip ars0n-framework-v2-beta-0.0.1.zip
-cd ars0n-framework-v2
-
-# Set IP
-echo "[+] Detecting Pi IP address..."
 PI_IP=$(hostname -I | awk '{print $1}')
 if [ -z "$PI_IP" ]; then
-  echo "Error: Could not detect local IP address. Exiting."
-  exit 1
+    echo "[!] ERROR: Failed to detect local IP"
+    exit 1
 fi
-echo "Detected IP: $PI_IP"
+echo "[+] Detected IP: $PI_IP"
 
-# React Server Setup
-echo "[+] Writing frontend env configuration (client/.env)..."
 mkdir -p client
 cat > client/.env <<EOF
 REACT_APP_SERVER_IP=${PI_IP}
 EOF
+echo "[+] Wrote client/.env"
 
-# Docker
-echo "[+] Shutting down any existing containers..."
-docker compose down | -y
+echo "[+] Setting up multi-arch builder…"
+docker buildx create --name ars0nbuilder --use >/dev/null 2>&1 || docker buildx use ars0nbuilder
+docker buildx inspect --bootstrap
 
-echo "[+] Building containers..."
-docker-compose up --build || docker builder prune && docker-compose build --no-cache
+CORE_SERVICES=( server client ai_service )
+for svc in "${CORE_SERVICES[@]}"; do
+    echo "[+] Building core service: $svc"
+    docker buildx build --platform linux/amd64,linux/arm64 -t ars0n/$svc:latest "./$svc" --load
+done
 
-echo "[+] Starting containers..."
+TOOLS=(
+    subfinder assetfinder katana sublist3r cloud_enum ffuf
+    subdomainizer cewl metabigor httpx gospider dnsx
+    github-recon nuclei shuffledns
+)
+for tool in "${TOOLS[@]}"; do
+    echo "[+] Building tool container: $tool"
+    docker buildx build --platform linux/amd64,linux/arm64 -t ars0n/$tool:latest "./docker/$tool" --load
+done
+
+echo "[+] Shutting down previous containers…"
+docker compose down || true
+
+echo "[+] Bringing up framework…"
 docker compose up -d
 
-echo "[+] Setup complete."
+echo ""
+echo "[+] Setup complete!"
 echo "UI  : http://${PI_IP}:3000"
 echo "API : https://${PI_IP}:8443"
 ```
 
-<p align="center">
-  <img src="assets/ignition_flow.png" alt="Ignition Flow" width="720">
-</p>
+</details>
 
 ---
 
@@ -222,26 +244,27 @@ sudo systemctl enable --now ars0n.service
 
 ## ✅ Verification Checklist
 
-- [ ] `client/.env` exists and contains `REACT_APP_SERVER_IP=<Pi IP>`  
-- [ ] `docker compose up -d` completes without errors  
-- [ ] `docker compose ps` shows `client`, `api`, `db` as `Up`  
-- [ ] UI reachable at `http://${PI_IP}:3000`  
-- [ ] API reachable at `https://${PI_IP}:8443`  
-- [ ] Browser network calls target the Pi IP (not `127.0.0.1`)
+* [ ] `client/.env` exists and contains `REACT_APP_SERVER_IP=<Pi IP>`
+* [ ] `docker compose up -d` completes without errors
+* [ ] `docker compose ps` shows all major services as `Up`
+* [ ] UI reachable at `http://<Pi IP>:3000`
+* [ ] API reachable at `https://<Pi IP>:8443`
+* [ ] Tooling containers build and run (`gospider`, etc.)
 
 ---
 
 ## 🛠️ Troubleshooting
 
-| Symptom | Root Cause | Fix |
-|----------|-------------|-----|
-| “Failed to fetch” / import fails | Frontend still points to `127.0.0.1` | Recreate `.env`, rebuild, confirm requests hit `https://${IP}:8443`. |
-| CORS error in browser | API not allowing frontend origin | Allow CORS for `http://${PI_IP}:3000`. |
-| UI loads but actions fail | API unreachable / wrong protocol | `curl -k https://${PI_IP}:8443/` to verify API; adjust protocol or cert. |
-| Nothing on `:3000` | Client binds only to localhost | Ensure it listens on `0.0.0.0` in config. |
-| DB errors | Database not ready / bad credentials | Check `docker compose logs db` and API’s `DATABASE_URL`. |
+| Symptom                          | Root Cause                           | Fix                                                                     |
+| -------------------------------- | ------------------------------------ | ----------------------------------------------------------------------- |
+| “Failed to fetch” / import fails | Frontend still points to `127.0.0.1` | Recreate `.env`, rebuild, confirm requests hit `https://${IP}:8443`.    |
+| CORS error in browser            | API not allowing frontend origin     | Allow CORS for `http://<Pi IP>:3000`.                                   |
+| UI loads but actions fail        | API unreachable / wrong protocol     | `curl -k https://<Pi IP>:8443/` to verify API; adjust protocol or cert. |
+| Nothing on `:3000`               | Client binds only to localhost       | Ensure it listens on `0.0.0.0` in config.                               |
+| DB errors                        | Database not ready / wrong image     | Use `arm64v8/postgres:14-alpine` and delete old DB volumes.             |
 
 Logs:
+
 ```bash
 docker compose logs client
 docker compose logs api
@@ -249,6 +272,7 @@ docker compose logs db
 ```
 
 Network & ports:
+
 ```bash
 docker compose ps
 ss -tulpen | grep -E '(:3000|:8443)'
@@ -258,22 +282,25 @@ ss -tulpen | grep -E '(:3000|:8443)'
 
 ## ❓ FAQ
 
-**Q:** Do I need to edit the compose file for my IP?  
+**Q:** Do I need to edit the compose file for my IP?
 **A:** No. Run `./ignition.sh` or manually create `.env` before building.
 
-**Q:** Can I change the UI port?  
-**A:** Yes. Edit the `client` service `ports` mapping in `docker-compose.yml`.
+**Q:** Will this work on x86 systems?
+**A:** Yes—multi-arch builds target both `amd64` and `arm64`.
 
-**Q:** Will this work on non-Pi hosts?  
-**A:** Yes, provided the environment variable points to the correct host IP.
+**Q:** Can I change the UI port?
+**A:** Edit the `client` service `ports` mapping in `docker-compose.yml`.
+
+**Q:** How do I add a new tool?
+**A:** Add its Dockerfile under `docker/`, append to the TOOLS array in `ignition.sh`, and add a service in `docker-compose.yml`.
 
 ---
 
-## 📦 Client Snippet (Reference)
+## 📦 Client Service Example
 
 ```yaml
 client:
-  container_name: ars0n-framework-v2-client-1
+  container_name: ars0n-framework-v2-client
   build:
     context: ./client
     args:
