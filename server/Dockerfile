@@ -1,45 +1,27 @@
-## ---------------------------------------------------------
-## Production-Ready Multi-Stage Build for Go API Server
-## ---------------------------------------------------------
+# ---- Build stage ----
+FROM golang:1.21 as builder
 
-# ---------- Stage 1: Builder ----------
-FROM golang:1.21 AS build
-
-# Create working directory
 WORKDIR /app
 
-# Enable Go modules
-ENV GO111MODULE=on
-
-# Copy go.mod and go.sum first (for better caching)
+# Copy go mod and sum first for dependency caching
 COPY go.mod go.sum ./
-
-# Download dependencies
 RUN go mod download
 
-# Copy the rest of the server source
+# Copy the rest of the source code
 COPY . .
 
-# Build static Go binary (no CGO)
+# Build the Go binary (replace 'main.go' with your actual entrypoint if needed)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o server .
 
-# ---------- Stage 2: Runtime ----------
-FROM alpine:3.19
-
-# Install certs for HTTPS requests
-RUN apk add --no-cache ca-certificates
+# ---- Minimal runtime stage ----
+FROM alpine:3.18
 
 WORKDIR /app
+COPY --from=builder /app/server /app/server
 
-# Copy compiled Go binary from builder
-COPY --from=build /app/server /app/server
+# (Optional) If you have runtime assets, copy them:
+# COPY --from=builder /app/models /app/models
+# COPY --from=builder /app/nuclei /app/nuclei
 
-# Optional: copy runtime assets if your server needs them:
-# COPY --from=build /app/models /app/models
-# COPY --from=build /app/nuclei /app/nuclei
-
-# Expose API port (matches your Go server config)
-EXPOSE 8443
-
-# Launch the Go server
+EXPOSE 8080
 ENTRYPOINT ["/app/server"]
