@@ -85,9 +85,50 @@ done
 echo "[+] Shutting down any existing containers (safe if none running)..."
 docker compose down || true
 
+# Check for reset-db argument to clean up potential version mismatch issues
+if [[ "$*" == *"--reset-db"* ]]; then
+  echo "[!] --reset-db flag detected. Wiping database container and volume..."
+  docker rm -f ars0n-framework-v2-db-1 2>/dev/null || true
+  docker volume rm ars0n-framework-v2-pi_postgres_data 2>/dev/null || true
+  docker volume rm ars0n-framework-v2_postgres_data 2>/dev/null || true # Fallback for different compose project names
+  echo "[+] Database reset complete."
+fi
+
 echo "[+] Launching the ars0n framework stack..."
 docker compose up -d
+
+echo "[+] Generating Systemd Service..."
+SERVICE_FILE="/etc/systemd/system/ars0n-framework.service"
+CURRENT_DIR=$(pwd)
+USER_NAME=$USER
+
+# Create the service file content
+cat <<EOF | sudo tee "$SERVICE_FILE" > /dev/null
+[Unit]
+Description=Ars0n Framework V2 Service
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=$CURRENT_DIR
+User=$USER_NAME
+Group=docker
+ExecStart=/usr/bin/docker-compose up -d
+ExecStop=/usr/bin/docker-compose down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "[+] Enabling and starting ars0n-framework.service..."
+sudo systemctl daemon-reload
+sudo systemctl enable ars0n-framework.service
+sudo systemctl restart ars0n-framework.service
 
 echo "[+] Setup complete!"
 echo "UI  : http://${PI_IP}:3000"
 echo "API : https://${PI_IP}:8443"
+echo "To reset the database in the future, run: ./ignition.sh --reset-db"
