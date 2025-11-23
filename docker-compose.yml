@@ -6,7 +6,7 @@ services:
   # ─────────────────────────────────────────────────────────────────────────────
   db:
     container_name: ars0n-framework-v2-db
-    image: arm64v8/postgres:14-alpine           # ← Pi-native, no x86 bloat
+    image: arm64v8/postgres:14-alpine
     platform: linux/arm64
     environment:
       POSTGRES_USER: postgres
@@ -52,11 +52,16 @@ services:
       - ars0n-network
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # React Frontend – auto-injects Pi IP at runtime
+  # React Frontend – Pi IP baked at build time (ignition.sh)
   # ─────────────────────────────────────────────────────────────────────────────
   client:
     container_name: ars0n-framework-v2-client
-    build: ./client
+    build:
+      context: ./client
+      args:
+        REACT_APP_SERVER_PROTOCOL: https
+        REACT_APP_SERVER_IP: ${PI_IP:-127.0.0.1}
+        REACT_APP_SERVER_PORT: 8443
     platform: linux/arm64
     ports:
       - "3000:3000"
@@ -68,7 +73,7 @@ services:
       - ars0n-network
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # AI Service – Python 3.13 + torch 2.9.1+cpu (Pi-native)
+  # AI Service – Python 3.13 + torch CPU
   # ─────────────────────────────────────────────────────────────────────────────
   ai_service:
     container_name: ars0n-framework-v2-ai-service
@@ -76,14 +81,14 @@ services:
       context: ./ai_service
       dockerfile: Dockerfile
       platform: linux/arm64
-    image: ars0n-ai:3.13
+    image: ars0n/ai:3.13
     platform: linux/arm64
     ports:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/ars0n
       - API_URL=https://api:8443
-      - SSL_VERIFY=false                     # ← self-signed cert bypass
+      - SSL_VERIFY=false
     depends_on:
       db:
         condition: service_healthy
@@ -94,7 +99,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s                      # torch import is slow on Pi
+      start_period: 60s
     restart: unless-stopped
     networks:
       - ars0n-network
@@ -102,49 +107,32 @@ services:
       - ai
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Recon Tool Swarm – on-demand, zero-startup-cost
+  # Recon Tool Swarm – clean, valid YAML anchors
   # ─────────────────────────────────────────────────────────────────────────────
-  subfinder:    &tool-template { build: ./docker/subfinder,    platform: linux/arm64 }
-  assetfinder:  &tool-template { build: ./docker/assetfinder,  platform: linux/arm64 }
-  katana:       &tool-template { build: ./docker/katana,       platform: linux/arm64 }
-  sublist3r:    &tool-template { build: ./docker/sublist3r,    platform: linux/arm64 }
-  cloud_enum:   &tool-template { build: ./docker/cloud_enum,   platform: linux/arm64 }
-  ffuf:         &tool-template { build: ./docker/ffuf,         platform: linux/arm64 }
-  subdomainizer:&tool-template { build: ./docker/subdomainizer,platform: linux/arm64 }
-  cewl:         &tool-template { build: ./docker/cewl,         platform: linux/arm64 }
-407  metabigor:    &tool-template { build: ./docker/metabigor,    platform: linux/arm64 }
-  httpx:        &tool-template { build: ./docker/httpx,        platform: linux/arm64 }
-  gospider:     &tool-template { build: ./docker/gospider,     platform: linux/arm64 }
-  dnsx:         &tool-template { build: ./docker/dnsx,         platform: linux/arm64 }
-  github-recon:&tool-template { build: ./docker/github-recon, platform: linux/arm64 }
-  nuclei:       &tool-template { build: ./docker/nuclei,       platform: linux/arm64 }
-  shuffledns:   &tool-template { build: ./docker/shuffledns,   platform: linux/arm64 }
+  tool_template: &tool_common
+    depends_on:
+      - api
+    entrypoint: ["sleep", "infinity"]
+    restart: "no"
+    networks:
+      - ars0n-network
+    platform: linux/arm64
 
-# Apply template to all tools
-  subfinder:    *tool-template
-  assetfinder:  *tool-template
-  katana:       *tool-template
-  sublist3r:    *tool-template
-  cloud_enum:   *tool-template
-  ffuf:         *tool-template
-  subdomainizer:*tool-template
-  cewl:         *tool-template
-  metabigor:    *tool-template
-  httpx:        *tool-template
-  gospider:     *tool-template
-  dnsx:         *tool-template
-  github-recon:*tool-template
-  nuclei:       *tool-template
-  shuffledns:   *tool-template
-
-  # Common tool config (DRY)
-  <<: *tool-template
-  depends_on:
-    - api
-  entrypoint: ["sleep", "infinity"]
-  restart: "no"
-  networks:
-    - ars0n-network
+  subfinder:     { <<: *tool_common, build: ./docker/subfinder }
+  assetfinder:   { <<: *tool_common, build: ./docker/assetfinder }
+  katana:        { <<: *tool_common, build: ./docker/katana }
+  sublist3r:     { <<: *tool_common, build: ./docker/sublist3r }
+  cloud_enum:    { <<: *tool_common, build: ./docker/cloud_enum }
+  ffuf:          { <<: *tool_common, build: ./docker/ffuf }
+  subdomainizer: { <<: *tool_common, build: ./docker/subdomainizer }
+  cewl:          { <<: *tool_common, build: ./docker/cewl }
+  metabigor:     { <<: *tool_common, build: ./docker/metabigor }
+  httpx:         { <<: *tool_common, build: ./docker/httpx }
+  gospider:      { <<: *tool_common, build: ./docker/gospider }
+  dnsx:          { <<: *tool_common, build: ./docker/dnsx }
+  github-recon:  { <<: *tool_common, build: ./docker/github-recon }
+  nuclei:        { <<: *tool_common, build: ./docker/nuclei }
+  shuffledns:    { <<: *tool_common, build: ./docker/shuffledns }
 
 volumes:
   postgres_data:
