@@ -1,28 +1,13 @@
-# Updated multi-arch Docker Compose for ars0n-framework-v2-pi
-#
-# This file defines the runtime topology for the ars0n framework.  It has
-# been rewritten to support multi-architecture container images (amd64 and
-# arm64) and to run cleanly on Raspberry Pi 4 devices.  The Postgres
-# service has been pinned to the arm64v8/postgres:14-alpine image to
-# guarantee ARM compatibility and efficient resource usage.  Each service
-# explicitly declares its build context and depends_on relationships are
-# carefully ordered so that the API and client wait on the database to
-# become healthy.  Temporary volumes have been simplified and the memory
-# limits/reservations have been removed for portability.  You can
-# override any port mappings or environment variables at runtime via
-# environment or docker-compose override files as needed.
-
 version: "3.9"
 
 services:
-
-  # ---------------------------------------------------------------------------
-  # Database: Postgres 14 running in Alpine on arm64v8.  A named volume
-  # (postgres_data) stores database state.  Healthcheck ensures that the
-  # database is ready before dependent services start.
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Database – arm64v8 pinned, lean, immortal
+  # ─────────────────────────────────────────────────────────────────────────────
   db:
     container_name: ars0n-framework-v2-db
-    image: postgres:14-alpine
+    image: arm64v8/postgres:14-alpine           # ← Pi-native, no x86 bloat
+    platform: linux/arm64
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -33,18 +18,19 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 12
+      start_period: 10s
     restart: unless-stopped
     networks:
       - ars0n-network
 
-  # ---------------------------------------------------------------------------
-  # API: Go backend.  Built from the ./server context.  Waits on the
-  # database to be healthy.  Listens on port 8443 and exposes database
-  # credentials via environment variables.
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Go API – HTTPS on 8443 with self-signed certs
+  # ─────────────────────────────────────────────────────────────────────────────
   api:
     container_name: ars0n-framework-v2-api
     build: ./server
+    platform: linux/arm64
     depends_on:
       db:
         condition: service_healthy
@@ -55,199 +41,110 @@ services:
       DATABASE_NAME: ars0n
     ports:
       - "8443:8443"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "https://localhost:8443/health", "--insecure"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
     restart: unless-stopped
     networks:
       - ars0n-network
 
-  # ---------------------------------------------------------------------------
-  # Client: React front‑end.  Built from the ./client context.  An .env file
-  # will be generated at runtime via ignition.sh to inject REACT_APP_SERVER_IP.
+  # ─────────────────────────────────────────────────────────────────────────────
+  # React Frontend – auto-injects Pi IP at runtime
+  # ─────────────────────────────────────────────────────────────────────────────
   client:
     container_name: ars0n-framework-v2-client
     build: ./client
+    platform: linux/arm64
     ports:
       - "3000:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - ars0n-network
 
-  # ---------------------------------------------------------------------------
-  # AI service: separate Python component built from ./ai_service.  Expects
-  # API_URL to point at the API container.  This service is optional and is
-  # disabled by default unless you enable the "ai" profile when running
-  # docker-compose.
+  # ─────────────────────────────────────────────────────────────────────────────
+  # AI Service – Python 3.13 + torch 2.9.1+cpu (Pi-native)
+  # ─────────────────────────────────────────────────────────────────────────────
   ai_service:
     container_name: ars0n-framework-v2-ai-service
-    build: ./ai_service
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+      platform: linux/arm64
+    image: ars0n-ai:3.13
+    platform: linux/arm64
+    ports:
+      - "8000:8000"
     environment:
-      API_URL: http://api:8443
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/ars0n
+      - API_URL=https://api:8443
+      - SSL_VERIFY=false                     # ← self-signed cert bypass
     depends_on:
-      - api
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s                      # torch import is slow on Pi
     restart: unless-stopped
     networks:
       - ars0n-network
     profiles:
       - ai
 
-  # ---------------------------------------------------------------------------
-  # Tool containers.  Each of these is built from the respective directory
-  # under ./docker and is not started automatically (restart: "no").  They
-  # share the network with the API service and can be run on demand.  The
-  # entrypoint for each tool defaults to sleep infinity so that the
-  # container stays alive; override the command at runtime to execute the
-  # tool.
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Recon Tool Swarm – on-demand, zero-startup-cost
+  # ─────────────────────────────────────────────────────────────────────────────
+  subfinder:    &tool-template { build: ./docker/subfinder,    platform: linux/arm64 }
+  assetfinder:  &tool-template { build: ./docker/assetfinder,  platform: linux/arm64 }
+  katana:       &tool-template { build: ./docker/katana,       platform: linux/arm64 }
+  sublist3r:    &tool-template { build: ./docker/sublist3r,    platform: linux/arm64 }
+  cloud_enum:   &tool-template { build: ./docker/cloud_enum,   platform: linux/arm64 }
+  ffuf:         &tool-template { build: ./docker/ffuf,         platform: linux/arm64 }
+  subdomainizer:&tool-template { build: ./docker/subdomainizer,platform: linux/arm64 }
+  cewl:         &tool-template { build: ./docker/cewl,         platform: linux/arm64 }
+407  metabigor:    &tool-template { build: ./docker/metabigor,    platform: linux/arm64 }
+  httpx:        &tool-template { build: ./docker/httpx,        platform: linux/arm64 }
+  gospider:     &tool-template { build: ./docker/gospider,     platform: linux/arm64 }
+  dnsx:         &tool-template { build: ./docker/dnsx,         platform: linux/arm64 }
+  github-recon:&tool-template { build: ./docker/github-recon, platform: linux/arm64 }
+  nuclei:       &tool-template { build: ./docker/nuclei,       platform: linux/arm64 }
+  shuffledns:   &tool-template { build: ./docker/shuffledns,   platform: linux/arm64 }
 
-  subfinder:
-    container_name: ars0n-framework-v2-subfinder
-    build: ./docker/subfinder
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
+# Apply template to all tools
+  subfinder:    *tool-template
+  assetfinder:  *tool-template
+  katana:       *tool-template
+  sublist3r:    *tool-template
+  cloud_enum:   *tool-template
+  ffuf:         *tool-template
+  subdomainizer:*tool-template
+  cewl:         *tool-template
+  metabigor:    *tool-template
+  httpx:        *tool-template
+  gospider:     *tool-template
+  dnsx:         *tool-template
+  github-recon:*tool-template
+  nuclei:       *tool-template
+  shuffledns:   *tool-template
 
-  assetfinder:
-    container_name: ars0n-framework-v2-assetfinder
-    build: ./docker/assetfinder
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  katana:
-    container_name: ars0n-framework-v2-katana
-    build: ./docker/katana
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  sublist3r:
-    container_name: ars0n-framework-v2-sublist3r
-    build: ./docker/sublist3r
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  cloud_enum:
-    container_name: ars0n-framework-v2-cloud_enum
-    build: ./docker/cloud_enum
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  ffuf:
-    container_name: ars0n-framework-v2-ffuf
-    build: ./docker/ffuf
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  subdomainizer:
-    container_name: ars0n-framework-v2-subdomainizer
-    build: ./docker/subdomainizer
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  cewl:
-    container_name: ars0n-framework-v2-cewl
-    build: ./docker/cewl
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  metabigor:
-    container_name: ars0n-framework-v2-metabigor
-    build: ./docker/metabigor
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  httpx:
-    container_name: ars0n-framework-v2-httpx
-    build: ./docker/httpx
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  gospider:
-    container_name: ars0n-framework-v2-gospider
-    build: ./docker/gospider
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  dnsx:
-    container_name: ars0n-framework-v2-dnsx
-    build: ./docker/dnsx
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  github-recon:
-    container_name: ars0n-framework-v2-github-recon
-    build: ./docker/github-recon
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  nuclei:
-    container_name: ars0n-framework-v2-nuclei
-    build: ./docker/nuclei
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
-
-  shuffledns:
-    container_name: ars0n-framework-v2-shuffledns
-    build: ./docker/shuffledns
-    depends_on:
-      - api
-    entrypoint: ["sleep", "infinity"]
-    restart: "no"
-    networks:
-      - ars0n-network
+  # Common tool config (DRY)
+  <<: *tool-template
+  depends_on:
+    - api
+  entrypoint: ["sleep", "infinity"]
+  restart: "no"
+  networks:
+    - ars0n-network
 
 volumes:
   postgres_data:
@@ -255,3 +152,6 @@ volumes:
 networks:
   ars0n-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
