@@ -4,11 +4,9 @@
 client/node_modules
 /.pnp
 .pnp.js
-debug.txt
 
 # testing
 /coverage
-*.tar.gz
 
 # production
 /build
