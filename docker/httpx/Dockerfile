@@ -1,10 +1,9 @@
-# httpx: requires Go >= 1.24
-FROM golang:1.24 AS build
-WORKDIR /src
-RUN git clone --depth 1 https://github.com/projectdiscovery/httpx.git
-WORKDIR /src/httpx/cmd/httpx
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /httpx
+FROM golang:1.24-alpine
 
-FROM alpine:3.19
-COPY --from=build /httpx /usr/bin/httpx
-ENTRYPOINT ["/usr/bin/httpx"]
+RUN apk add --no-cache git
+RUN go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+
+WORKDIR /app
+RUN mkdir -p /data && chmod 777 /data
+
+ENTRYPOINT ["httpx"] 
