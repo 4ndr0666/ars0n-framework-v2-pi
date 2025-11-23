@@ -1,29 +1,23 @@
-FROM node:20-slim AS build
+FROM node:18-alpine
 
-# Set working directory for build stage
 WORKDIR /app
 
-# Copy package manifests and install dependencies
 COPY package.json package-lock.json ./
-RUN npm install --legacy-peer-deps
+RUN npm install
 
-# Copy the rest of the client source and build the production bundle
 COPY . .
-RUN npm run build
 
-# Final stage: serve the compiled React app with a lightweight HTTP server
-FROM node:20-slim
+ARG REACT_APP_SERVER_PROTOCOL=http
+ARG REACT_APP_SERVER_IP=127.0.0.1
+ARG REACT_APP_SERVER_PORT=8443
 
-WORKDIR /app
+RUN REACT_APP_SERVER_PROTOCOL=$REACT_APP_SERVER_PROTOCOL \
+    REACT_APP_SERVER_IP=$REACT_APP_SERVER_IP \
+    REACT_APP_SERVER_PORT=$REACT_APP_SERVER_PORT \
+    npm run build
 
-# Install the serve package globally to serve static files
 RUN npm install -g serve
 
-# Copy build artifacts from the previous stage
-COPY --from=build /app/build ./build
+CMD ["serve", "-s", "build"]
 
-# Expose the port configured in docker-compose
 EXPOSE 3000
-
-# Start the static file server
-CMD ["serve", "-s", "build", "-l", "3000"]
