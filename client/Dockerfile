@@ -7,7 +7,7 @@ RUN npm install
 
 COPY . .
 
-ARG REACT_APP_SERVER_PROTOCOL=http
+ARG REACT_APP_SERVER_PROTOCOL=https
 ARG REACT_APP_SERVER_IP=127.0.0.1
 ARG REACT_APP_SERVER_PORT=8443
 
@@ -18,6 +18,6 @@ RUN REACT_APP_SERVER_PROTOCOL=$REACT_APP_SERVER_PROTOCOL \
 
 RUN npm install -g serve
 
-CMD ["serve", "-s", "build"]
+CMD ["serve", "-s", "build", "-l", "3000"]
 
 EXPOSE 3000

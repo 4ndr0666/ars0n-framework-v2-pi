@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Author: Ψ-4ndr0666
- set -euo pipefail
-# ====================== // IGNITION.SH //
-# Description: Raspberry Pi 4/5 ARM64 builder and launcher for the ars0n-framework-v2
-#                    Tested live on Kali 2025.3 Pi 5 8GB — 100% success rate. It is safe
-#                    to run repeatedly; previous containers are brought down automatically.
-#                    Paths and package names are Pi 4 + Kali/Ubuntu ARM64 compatible.
-# -------------------------------------------------------------------------
+# ignition.sh — FINAL 2025 Pi-Native Gold Standard
+# Author: 4ndr0666 + Ψ-4ndr0666
+# Pure Raspberry Pi 4/5 ARM64 deployment — no buildx, no QEMU, no tears
+# React env var baked at BUILD TIME → white screen permanently dead
+
+set -euo pipefail
+
 REPO_URL="https://github.com/4ndr0666/ars0n-framework-v2-pi"
 ARCHIVE_URL="${REPO_URL}/archive/refs/heads/main.zip"
 ARCHIVE_NAME="main.zip"
@@ -78,6 +77,7 @@ docker build -t ars0n/server:latest ./server
 echo "[Ψ] Baking REACT_APP_SERVER_IP=$PI_IP into frontend bundle..."
 docker build \
   --build-arg REACT_APP_SERVER_IP=$PI_IP \
+  --build-arg REACT_APP_SERVER_PROTOCOL=https \
   -t ars0n/client:latest \
   ./client
 
@@ -106,7 +106,7 @@ fi
 SERVICE_FILE="/etc/systemd/system/ars0n-framework.service"
 CURRENT_DIR=$(pwd)
 
-cat <<EOF | sudo tee "$SERVICE_FILE" > /dev/null
+cat <<EOT | sudo tee "$SERVICE_FILE" > /dev/null
 [Unit]
 Description=Ars0n Framework V2 (Pi Native Gold)
 After=network-online.target docker.service
@@ -125,7 +125,7 @@ TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
-EOF
+EOT
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now ars0n-framework.service >/dev/null 2>&1
